@@ -142,7 +142,6 @@ def parseDexHeader():
 
     dex_header.magic =dex_magic
     
-
     dex_header.checksum =dexheader[8:0xc]
     tmpValue= list(reversed(dex_header.checksum))
     dex_header.checksum =append_hex(tmpValue[0],tmpValue[1],tmpValue[2],tmpValue[3])
@@ -233,9 +232,65 @@ def parseDexHeader():
     #调用打印函数，打印dex文件头数据
     dex_header.printInfo()
 
-   
+#计算dex_header->checksum
+def calcChecksum():
+    '''
+        checksum采用Adler-32算法，计算数据范围是 0xc到文件结尾。
+        adler-32计算分为两个步骤：
+        1、定义两个变量，varA、varB，其中varA初始化为1，varB初始化为0
+        2、读取字节数组的一个字节（byteA），计算varA =(varA +varB) mod 65521
+            然后计算出 varB =(varA +varB) mod 65521
+        3、重复步骤2，直至字节数组全部读取完毕，得到最终 varA、varB两个变量的结果
+        4、得到的varA、varB两个变量， checksum =(varB <<16) + varA
 
+    '''    
+    dexFileMmap.seek(0xc)
+    srcBtye =dexFileMmap.read() #获取 0xc之后的全部数据
+    varA =1
+    varB =0
+    icount =0
+    listAB =[]
+
+    while icount <len(srcBtye):
+        varA =(varA +srcBtye[icount]) % 65521
+        varB =(varB +varA) %65521
+        icount +=1
+
+    outPut =(varB <<16) +varA
+
+    return outPut
+   
+#解析文件字符串
+def parseStringIdList():
+    '''
+    解析字符串索引表
+    1、字符串数量在dexHeader->string_ids_size 中定义，
+    2、字符串偏移在dexHeader->string_ids_off 中定义，一般值为 0x70
+    '''
+    string_ids_size =dex_header.string_ids_size #string 数量
+    string_ids_off =dex_header.string_ids_off   #string 初始偏移
+
+    for i in range(string_ids_size):
+        string_item_off =string_ids_off +0x4 *i
+        parseStringItemData(string_item_off)
+
+
+
+
+'''
+函数功能：解析数据区中的string数据，将mutf-8数据转化为utf-8数据
+函数参数：字符串mutf-8数据的偏移值
+函数返回：转化之后的 utf-8数据
+'''
+def parseStringItemData(stringItemOff):
+    dexFileMmap.seek(stringItemOff)
     
+    s =0
+    stringSeek =0
+    while(True):
+       a =dexFileMmap.read() 
+
+
 
 
 
@@ -251,11 +306,7 @@ def append_hex(arg0, arg1, arg2, arg3):
 
 
 
-
-
-
-
-
 if __name__ == "__main__":
     loadFile()
     parseDexHeader()
+    calcChecksum()
