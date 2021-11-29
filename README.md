@@ -12,4 +12,9 @@
  string数据的mutf-8的格式转化为utf-8格式，进行中。
 ### 11-17
  使用struct解析从内存中获取的字节数据，感觉之前写的格式转换都可以采用这种方式进行。
-
+### 11-29
+ 已经完成：strings解析，types解析
+ 正在进行：protos解析
+ 尚未开始：fiedl解析，method解析，class_def解析，map_list解析
+ 其中fiedl解析，method解析应该较快完成
+ class_def解析，map_list解析 初步判断难度稍大。
