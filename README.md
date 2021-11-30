@@ -15,6 +15,10 @@
 ### 11-29
  已经完成：strings解析，types解析
  正在进行：protos解析
- 尚未开始：fiedl解析，method解析，class_def解析，map_list解析
+ 尚未开始：field解析，method解析，class_def解析，map_list解析
  其中fiedl解析，method解析应该较快完成
  class_def解析，map_list解析 初步判断难度稍大。
+### 11-30
+ 已经完成：strings解析，types解析,protos解析,field解析
+ 正在进行：
+ 尚未开始：method解析，class_def解析，map_list解析
