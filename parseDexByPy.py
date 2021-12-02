@@ -1,4 +1,6 @@
 #!/usr/bin/env python3.8
+#-*- coding : utf-8-*-
+# coding:unicode_escape
 
 '''
 项目内容：解析dex文件格式
@@ -14,6 +16,7 @@ import struct
 import sys
 import binascii
 import socket
+from types import new_class
 
 '''
 
@@ -28,11 +31,6 @@ import socket
      --------class_defs     类的定义区
 数据区--------data           数据区
      --------link_data      链接数据区
-
-
-
-
-
 
 '''
 
@@ -101,13 +99,39 @@ class struct_dex_header:
         print("data_off         -->",self.data_off)
 
 
+#定义proto的类。
+class proto_id_item:
+    shorty_str =None        #方法返回值和参数类型的缩写
+    return_str =None        #方法返回值的类型
+    parameters_str =None    #方法参数的类型
 
 
+#定义field的类型
+class field_id_item:
+    class_str =None         #该字段被定义的类的名称
+    type_str  =None         #该字段的类型
+    name_str  =None         #该字段的名称
+
+
+#定义method的类型
+class method_id_item:
+    class_str =None     #method所属的类
+    proto_str =None     #method的方法原型
+    name_str  =None     #method的名称
 
 #全局变量
 dex_header =struct_dex_header()     #dex结构体
+strings_list =[]                    #string全部字符串信息
+types_list =[]                      #type全部字符串信息
+protos_list =[]                     #proto全部字符串信息
+fields_list =[]                     #field全部字符串信息
+methods_list =[]                   #method全部字符串信息
 
-#加载dex文件
+'''
+函数功能：加载dex文件
+函数参数：无
+函数返回：dexFileMmap，dex文件加载内存映射
+'''
 def loadFile():
     try:
         dexFilePath =sys.argv[1]  #通过ssy来获取命令行参数，获取加载目标文件
@@ -125,7 +149,12 @@ def loadFile():
         print("请输入正确的dex文件")
         exit()
 
-#读取dexheader数据
+
+'''
+函数功能：解析dexheader数据
+函数参数：dexFileMmap内存数据
+函数返回：打印dexheader信息，
+'''
 def parseDexHeader():
     dexFileMmap.seek(0)
     dexheader =dexFileMmap.read(0x70)  #dexheader长度固定，0x70,112个字节
@@ -232,7 +261,12 @@ def parseDexHeader():
     #调用打印函数，打印dex文件头数据
     dex_header.printInfo()
 
-#计算dex_header->checksum
+
+'''
+函数功能：计算校验和；dex_header->checksum
+函数参数：读取oxc之后全部数据；dexFileMmap.seek(0xc)
+函数返回：校验和
+'''
 def calcChecksum():
     '''
         checksum采用Adler-32算法，计算数据范围是 0xc到文件结尾。
@@ -260,7 +294,12 @@ def calcChecksum():
 
     return outPut
    
-#解析文件字符串
+
+'''
+函数功能：解析文件字符串
+函数参数：stringIdOffset
+函数返回：打印string内容
+'''
 def parseStringIdList():
     '''
     解析字符串索引表
@@ -268,13 +307,26 @@ def parseStringIdList():
     2、字符串偏移在dexHeader->string_ids_off 中定义，一般值为 0x70
     '''
     string_ids_size =dex_header.string_ids_size #string 数量
-    string_ids_off =dex_header.string_ids_off   #string 初始偏移
+    string_ids_size =eval(string_ids_size)
+    string_ids_off =dex_header.string_ids_off   #string 索引表初始偏移
+    string_ids_off =eval(string_ids_off)
 
-    for i in range(string_ids_size):
-        string_item_off =string_ids_off +0x4 *i
-        parseStringItemData(string_item_off)
+    print("---***---string_ids---***---")
+    print("字符串数量：",string_ids_size)    
 
+    for i in range(string_ids_size):  #遍历索引表
+        string_index_off =string_ids_off +0x4 *i  #字符串索引表地址
+        dexFileMmap.seek(string_index_off  ,0)
+        string_item_off =dexFileMmap.read(4)    #字符串数据区地址
+        string_item_off =eval(append_hex(string_item_off[3],string_item_off[2],string_item_off[1],string_item_off[0]))
+        str_data =parseStringItemData(string_item_off)
 
+        try:
+            print("字符串序列:",i,str_data.decode())
+            strings_list.append(str_data.decode())
+        except UnicodeDecodeError:
+            print("字符串序列:",i,str(str_data))    #如果不能使用utf-8编码，则直接打印bytes数据。
+            strings_list.append(str_data)
 
 
 '''
@@ -284,15 +336,269 @@ def parseStringIdList():
 '''
 def parseStringItemData(stringItemOff):
     dexFileMmap.seek(stringItemOff)
+    result =readUled128(stringItemOff)
+    str_len =result[0]
+    str_off =result[1]
+    dexFileMmap.seek(str_off)
+    str_data =dexFileMmap.read(str_len)
+    return str_data
+
+
+'''
+函数功能：解析类型字符串 type_str
+函数参数：typeIdOffset
+函数返回：打印type内容
+'''
+def parseTypeIdList():
+    '''
+    解析类型索引表
+    1、类型数量在 dex_header->type_ids_size 中定义
+    2、类型偏移在 dex_header->type_ids_off 中定义
+    3、type中的value信息是在string中的偏移；例：type_ids_off 中存放的数值为 0x7E，对应的数据则是 string[0x7E]中的字符串
+    '''
+    type_ids_size =dex_header.type_ids_size
+    type_ids_size =eval(type_ids_size)
+    type_ids_off =dex_header.type_ids_off
+    type_ids_off =eval(type_ids_off)
+
+    print("---***---type_ids---***---")
+    print("类型数量：",type_ids_size)    
+
+    for i in range(type_ids_size):
+        dexFileMmap.seek(type_ids_off +0x4 *i, 0)
+        type_ids =dexFileMmap.read(4)
+        type_ids =eval(append_hex(type_ids[3], type_ids[2], type_ids[1], type_ids[0]))
+        if(type_ids<= len(strings_list)):
+            type_str =strings_list[type_ids]
+            type_str =jniTypeFormat(type_str)
+            types_list.append(type_str)
+            print("类型序列：",i,type_str)
+
+
+'''
+函数功能：类型字符串转换。将JNI函数签名类型的字符转换成基本数据类型的字符；将“C” 转换成“char”
+函数参数：JNI函数签名类型的字符
+函数返回：基本数据类型的字符
+'''
+def jniTypeFormat(jniType):
+    jniTypeDict ={
+        "Z":"boolean",
+        "B":"byte",
+        "C":"char",
+        "S":"short",
+        "I":"int",
+        "J":"long",
+        "F":"float",
+        "D":"double",
+        "V":"void"
+    }
+    if(jniType.startswith("L") ==True):
+        return jniType[1:len(jniType) -1]
+    elif(jniType.startswith("[") ==True):
+        tmp =jniType[1:len(jniType)]
+        if(tmp.startswith("L") ==True):
+            return tmp[1:len(tmp) -1] +"[]"
+        else:
+            if(jniTypeDict.get(tmp) !=None):
+                return jniTypeDict[tmp] +"[]"
+            else:
+                return jniType
+    else:
+        if(jniTypeDict.get(jniType) !=None):
+            return jniTypeDict[jniType]
+        else:
+            return jniType
+
+
+'''
+函数功能：解析方法原型 proto_str；即含有方法的参数和返回值，不含方法的名称
+函数参数：protoIdOffet
+函数返回：打印proto的内容
+'''
+def parseProtoIdList():
+    '''
+    解析proto数据
+    1、方法原型数量在 dex_header.proto_ids_size 中定义
+    2、方法原型索引偏移在 dex_header.proto_ids_size 中定义
+
+    方法原型索引结构：每个方法原型占用12个字节
+    proto_id_item{
+        uint shorty_idx             value:strings_list索引；返回值与参数的类型缩写；比如返回值类型为"L"，参数类型为"I"，则此数据为"LI"
+        uint return_type_idx        value:types_list索引；方法返回值类型
+        uint parameters_type_off    value:文件偏移partameters_ptr；方法参数的地址
+    }
+    partameters_ptr{
+        uint size                   value:方法参数的数量
+        ushort type_item            value:types_list索引；方法参数类型
+    }
+    '''
+    proto_ids_size =eval(dex_header.proto_ids_size)
+    proto_ids_off =eval(dex_header.proto_ids_off)
+
+    print("---***---proto_ids_size---***---")
+    print("类型数量：",proto_ids_size)  
+
+    for i in range(proto_ids_size):
+        proto_item =proto_id_item()
+        #获取shorty字符串
+        dexFileMmap.seek(proto_ids_off +12 *i+0,0)
+        shorty_idx_tmp =dexFileMmap.read(4)
+        shorty_idx =eval(append_hex(shorty_idx_tmp[3], shorty_idx_tmp[2], shorty_idx_tmp[1], shorty_idx_tmp[0]))
+        if (shorty_idx <=len(strings_list)):
+            proto_item.shorty_str =strings_list[shorty_idx]
+        #获取return字符串
+        dexFileMmap.seek(proto_ids_off +12 *i+4,0)
+        return_type_idx_tmp =dexFileMmap.read(4)
+        return_type_idx =eval(append_hex(return_type_idx_tmp[3], return_type_idx_tmp[2], return_type_idx_tmp[1], return_type_idx_tmp[0]))
+        if(return_type_idx <=len(types_list)):
+            proto_item.return_str =types_list[return_type_idx]
+        #获取parameter字符串
+        dexFileMmap.seek(proto_ids_off +12 *i+8,0)
+        parameters_type_off =dexFileMmap.read(4)
+        parameters_type_off =eval(append_hex(parameters_type_off[3], parameters_type_off[2],parameters_type_off[1],parameters_type_off[0])) #参数偏移
+        parameters =[]
+        if(parameters_type_off !=0): 
+            dexFileMmap.seek(parameters_type_off,0)
+            parameters_size =dexFileMmap.read(4)
+            parameters_size =eval(append_hex(parameters_size[3], parameters_size[2], parameters_size[1], parameters_size[0])) #参数数量
+            
+            for i_parameters in range(parameters_size): #参数字符串
+                dexFileMmap.seek(parameters_type_off +4 +2*i_parameters,0)
+                parameters_type_idx_tmp =dexFileMmap.read(2)
+                parameters_type_idx =eval(append_hex_short(parameters_type_idx_tmp[1],parameters_type_idx_tmp[0]))
+                if(parameters_type_idx <=len(types_list)):
+                    parameters.append(types_list[parameters_type_idx])
+        proto_item.parameters_str =parameters
+        protos_list.append(proto_item)
+        tmp =str()
+        for i_print in range(len(parameters)):
+            if( i_print==0):
+                tmp = tmp +parameters[i_print]
+            else:
+                tmp = tmp +"," +parameters[i_print]
+        print("方法原型序列：",i,proto_item.return_str+ " ("+ tmp+ ")")
+
+
+'''
+函数功能：解析字段 field；
+函数参数：fieldIdOffset
+函数返回：打印field内容
+'''
+def parseFieldIdList():
+    field_ids_size =eval(dex_header.field_ids_size)
+    field_ids_off  =eval(dex_header.field_ids_off)
+
+    print("---***---field_ids_size---***---")
+    print("类型数量：",field_ids_size)    
+
+    for i in range(field_ids_size):
+        field_item =field_id_item()
+
+        dexFileMmap.seek(field_ids_off +8*i +0, 0)
+        class_type_idx =dexFileMmap.read(2) #该字段被定义的类的名称
+        tmp =eval(append_hex_short(class_type_idx[1], class_type_idx[0]))
+        field_item.class_str =types_list[tmp]
+
+        dexFileMmap.seek(field_ids_off +8*i +2, 0)
+        type_type_idx =dexFileMmap.read(2)
+        tmp =eval(append_hex_short(type_type_idx[1], type_type_idx[0]))
+        field_item.type_str =types_list[tmp]
+
+        dexFileMmap.seek(field_ids_off +8*i +4, 0)
+        name_string_idx =dexFileMmap.read(4)
+        tmp =eval(append_hex(name_string_idx[3], name_string_idx[2], name_string_idx[1], name_string_idx[0]))
+        field_item.name_str =strings_list[tmp]
+        
+        fields_list.append(field_item)
+        print("字段序列：",i,field_item.type_str+" "+field_item.class_str+"."+field_item.name_str)
     
-    s =0
-    stringSeek =0
-    while(True):
-       a =dexFileMmap.read() 
+
+'''
+函数功能：解析method
+函数参数：
+函数输出：
+'''
+def parseMethodIdList():
+    '''
+    class method_id_item:
+    class_str =None     #method所属的类    tpyes_list的索引
+    proto_str =None     #method的方法原型   protos_list的索引
+    name_str  =None     #method的名称      strings_list的索引
+    '''
+    method_ids_size =eval(dex_header.method_ids_size)
+    method_ids_off  =eval(dex_header.method_ids_off)
+    print("---***---method_ids_size---***---")
+    print("类型数量：",method_ids_size)  
+
+    for i in range(method_ids_size):
+        method_item =method_id_item()
+
+        dexFileMmap.seek(method_ids_off + 0x8*i)
+        class_type_idx =dexFileMmap.read(2)
+        tmp =eval(append_hex_short(class_type_idx[1], class_type_idx[0]))
+        method_item.class_str =types_list[tmp]
+
+        dexFileMmap.seek(method_ids_off + 0x8*i +2)
+        proto_type_idx =dexFileMmap.read(2)
+        tmp =eval(append_hex_short(proto_type_idx[1], proto_type_idx[0]))
+        method_item.proto_str =protos_list[tmp]
+
+        dexFileMmap.seek(method_ids_off + 0x8*i +4)
+        name_string_idx =dexFileMmap.read(4)
+        tmp =eval(append_hex(name_string_idx[3], name_string_idx[2], name_string_idx[1], name_string_idx[0]))
+        method_item.name_str =strings_list[tmp]
+
+        methods_list.append(method_item)
+        
+        tmp =str()
+        for i_print in range(len(method_item.proto_str.parameters_str)):
+            if( i_print==0):
+                tmp = tmp +method_item.proto_str.parameters_str[i_print]
+            else:
+                tmp = tmp +"," +method_item.proto_str.parameters_str[i_print]
+        print("方法序列",i,
+            method_item.proto_str.return_str +" " +method_item.class_str +"." +method_item.name_str +"(" +tmp +")")
 
 
+'''
+函数功能：解析uleb128的数据，获取string的长度。
+函数参数：uleb128数据起始位置
+函数返回：result[0],数据长度;result[1]，数据内容
+相关连接：https://www.52pojie.cn/thread-1220562-1-1.html
+'''
+def readUled128(offset):
+    result = [-1,-1]
+    n = 0
+    dexFileMmap.seek(offset)
 
-
+    tmp =dexFileMmap.read(1)
+    data =struct.unpack('!B' ,tmp) #利用struct将获取到的 byte数据转为 int类型。
+    data =data[0]
+    #data = int(dexFileMmap.read(1))
+    if data > 0x7f:
+        dexFileMmap.seek(offset +1)
+        n = 1
+        tmp = struct.unpack('!B' ,dexFileMmap.read(1))
+        
+        data = (data & 0x7f) | ((tmp[0] & 0x7f) << 7)
+        if tmp[0] > 0x7f:
+            dexFileMmap.seek(offset + 2)
+            n = 2
+            tmp = struct.unpack('!B' ,dexFileMmap.read(1))
+            data |= (tmp[0] & 0x7f) << 14
+            if tmp[0] > 0x7f:
+                dexFileMmap.seek(offset + 3)
+                n = 3
+                tmp = struct.unpack('!B' ,dexFileMmap.read(1))
+                data |= (tmp[0] & 0x7f) << 21
+                if tmp[0] > 0x7f:
+                    dexFileMmap.seek(offset + 4)
+                    n = 4
+                    tmp = struct.unpack('!B' ,dexFileMmap.read(1))
+                    data |= tmp[0] << 28
+    result[0] = data
+    result[1] = offset + n + 1
+    return result
 
 
 #将hex数据移位拼接，例如 0x11 +0x22 +0x33 +0x44 = 0x11223344
@@ -303,10 +609,24 @@ def append_hex(arg0, arg1, arg2, arg3):
     result = arg0 +arg1 +arg2 +arg3
     return hex(result)
         
+#将hex数据移位拼接，例如 0x11 +0x22 +0x33 +0x44 = 0x11223344
+def append_hex_short(arg0, arg1):
+    arg0 =arg0<<8
+    result = arg0 +arg1
+    return hex(result)
 
 
-
+'''
+函数功能：解析dex文件格式
+函数参数：
+函数返回：
+'''
 if __name__ == "__main__":
-    loadFile()
-    parseDexHeader()
-    calcChecksum()
+    loadFile()         #加载dex文件
+    parseDexHeader()   #解析dexHeader
+    calcChecksum()     #计算checksum
+    parseStringIdList()#解析stringID格式
+    parseTypeIdList()  #解析typeID格式
+    parseProtoIdList() #解析方法原型
+    parseFieldIdList() #解析字段
+    parseMethodIdList()#解析method信息
