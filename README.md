@@ -22,3 +22,8 @@
  已经完成：strings解析，types解析,protos解析,field解析
  正在进行：
  尚未开始：method解析，class_def解析，map_list解析
+### 12-07
+ 已经完成：strings解析，types解析,protos解析,field解析,method解析，
+ 正在进行：class_def解析,基本解析完成，正在debug
+ 尚未开始：map_list解析
+ 
