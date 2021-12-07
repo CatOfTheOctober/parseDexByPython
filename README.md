@@ -24,6 +24,6 @@
  尚未开始：method解析，class_def解析，map_list解析
 ### 12-07
  已经完成：strings解析，types解析,protos解析,field解析,method解析，
- 正在进行：class_def解析,基本解析完成，正在debug
+ 正在进行：class_def解析,基本解析完成，正在debug。
  尚未开始：map_list解析
- 
+ 当前问题，python的 for循环似乎有问题，多个结构嵌套循环时 跑飞了。暂时不知道怎么解决，少量循环正常。
