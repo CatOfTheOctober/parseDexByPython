@@ -640,7 +640,8 @@ def parseClassIdList():
         
     for i in range(class_ids_size):
         class_item =class_def_item()
-
+        if(i ==74):
+            a=0
         class_str =readFileHexData(class_ids_off +0x20 *i +0, 4, types_list)
         class_item.class_str =class_str
 
@@ -694,11 +695,13 @@ def parseClassDataItem(off):
     virtual_methods_size_ =tmp[0]
     class_data_item_.virtual_methods_size =virtual_methods_size_
 
-    for i in range(static_fields_size_):    #解析static_fields 结构：uleb128 field_idx_diff; uledb128 access_flags
+    field_diff_off =0
+    for static_fields_i in range(static_fields_size_):                #解析static_fields 结构：uleb128 field_idx_diff; uledb128 access_flags
         static_field_item =encoded_field()
 
-        tmp =readUled128(tmp[1])    #获取field_idx_diff
-        field_diff =fields_list[tmp[0]]
+        tmp =readUled128(tmp[1])                        #获取field_idx_diff。
+        field_diff_off +=tmp[0]                         #此值并不直接存放field_diff 在field_list的索引，当存在多个field时，第一个此值存放其在field_list的索引，之后值即为相对于上一个字符索引的偏移
+        field_diff =fields_list[field_diff_off]
         tmp =readUled128(tmp[1])
         access_flags =tmp[0]
         static_field_item.field_diff_str =field_diff
@@ -708,11 +711,13 @@ def parseClassDataItem(off):
     if(len(static_fields_list) !=0):
         class_data_item_.static_fields =static_fields_list
 
-    for i in range(instance_fields_size_):
+    field_diff_off =0
+    for instance_fields_i in range(instance_fields_size_):
         instance_field_item =encoded_field()
 
         tmp =readUled128(tmp[1])    #获取field_idx_diff
-        field_diff =fields_list[tmp[0]]
+        field_diff_off +=tmp[0]
+        field_diff =fields_list[field_diff_off]
         tmp =readUled128(tmp[1])
         access_flags =tmp[0]
 
@@ -723,9 +728,11 @@ def parseClassDataItem(off):
     if(len(instance_fields_list) !=0):
         class_data_item_.instance_fields =instance_fields_list
 
-    for i in range(direct_methods_size_):
+    a_list =[]
+    for direct_methods_i in range(direct_methods_size_):
         direct_method_item =encoded_method()
 
+        a_list.append(direct_methods_i)
         tmp =readUled128(tmp[1])
         method_diff =methods_list[tmp[0]]
         tmp =readUled128(tmp[1])
@@ -742,9 +749,9 @@ def parseClassDataItem(off):
     if(len(direct_methods_list) !=0):
         class_data_item_.direct_methods =direct_methods_list
 
-    for i in range(virtual_methods_size_):
+    for virtual_methods_i in range(virtual_methods_size_):
         virtual_method_itme =encoded_method()
-
+            
         tmp =readUled128(tmp[1])
         method_diff =methods_list[tmp[0]]
         tmp =readUled128(tmp[1])
@@ -816,14 +823,14 @@ def parseCodeItem(off):
 函数返回：打印class_def_item内容
 '''
 def printClassDefList():
-    for i in (len(classs_list)):
+    for class_list_i in range(len(classs_list)):
         #class_item =class_def_item()
-        class_item =classs_list[i]
-        print("类序列",i)
+        class_item =classs_list[class_list_i]
+        print("类序列",class_list_i)
         print(" class_str", class_item.class_str)
         print(" access_flags", class_item.access_flags_str)
         print(" superclass_str", class_item.superclass_str)
-        print(" interfaces_str", class_item.superclass_str)
+        print(" interfaces_str", class_item.intreface_str)
         print(" source_file_str", class_item.source_file_str)
         print(" annotations_str", class_item.annotations_str)
 
@@ -836,24 +843,24 @@ def printClassDefList():
 
         #print("   ***---static_fields---***")
         static_field_item =encoded_field()
-        for i in range(class_data_item_.static_fields_size):
-            static_field_item =static_fields_list[i]
-            print("   static_field i", i)
+        for static_fields_i in range(class_data_item_.static_fields_size):
+            static_field_item =static_fields_list[static_fields_i]
+            print("   static_field i", static_fields_i)
             print("    diff", static_field_item.field_diff_str.type_str+" "+ 
-                                        static_field_item.field_diff_str.class_str+"."+ static_field_item.field_diff_str.type_str.name_str)
+                                        static_field_item.field_diff_str.class_str+"."+ static_field_item.field_diff_str.name_str)
             print("    access_flags", static_field_item.access_flags_str)
 
         instance_field_item =encoded_field()
-        for i in range(class_data_item_.instance_fields_size):
-            instance_field_item =instance_fields_list[i]
-            print("   instance_field i", i)
+        for instance_fields_i in range(class_data_item_.instance_fields_size):
+            instance_field_item =instance_fields_list[instance_fields_i]
+            print("   instance_field i", instance_fields_i)
             print("    diff", instance_field_item.field_diff_str.type_str+" "+ 
-                                        instance_field_item.field_diff_str.class_str+"."+ instance_field_item.field_diff_str.type_str.name_str)
+                                        instance_field_item.field_diff_str.class_str+"."+ instance_field_item.field_diff_str.name_str)
             print("    access_flags", instance_field_item.access_flags_str)
 
         direct_method_item =encoded_method()
-        for i in range(class_data_item_.direct_methods_size):
-            direct_method_item =direct_methods_list[i]
+        for direct_methods_i in range(class_data_item_.direct_methods_size):
+            direct_method_item =direct_methods_list[direct_methods_i]
 
             method_item_ =direct_method_item.method_diff_str
             tmp_str =str()
@@ -863,7 +870,7 @@ def printClassDefList():
                 else:
                     tmp_str = tmp_str +"," +method_item_.proto_str.parameters_str[i_print]
 
-            print("   direct_method i", i)
+            print("   direct_method i", direct_methods_i)
             print("    diff", tmp_str)
             print("    access_flags", direct_method_item.access_flags_str)
             code_item_ =direct_method_item.code_data
@@ -874,14 +881,12 @@ def printClassDefList():
             print("     debug_info_off", code_item_.debug_info_off)
             print("     insns_size", code_item_.insns_size)
             print("     insns", code_item_.insns)
-            for i in range (code_item_.insns_size):
-                print("      ", code_item_.insns_size[i]),
             print("     padding", code_item_.padding)
             print("     tries", code_item_.tries)
             print("     handleres", code_item_.handleres)
 
-        for i in range(class_data_item_.virtual_methods_size):
-            virtual_method_item =virtual_methods_list[i]
+        for virtual_methods_i in range(class_data_item_.virtual_methods_size):
+            virtual_method_item =virtual_methods_list[virtual_methods_i]
 
             method_item_ =virtual_method_item.method_diff_str
             tmp_str =str()
@@ -891,7 +896,7 @@ def printClassDefList():
                 else:
                     tmp_str = tmp_str +"," +method_item_.proto_str.parameters_str[i_print]
 
-            print("   direct_method i", i)
+            print("   direct_method i", virtual_methods_i)
             print("    diff", tmp_str)
             print("    access_flags", virtual_method_item.access_flags_str)
             code_item_ =virtual_method_item.code_data
@@ -902,8 +907,6 @@ def printClassDefList():
             print("     debug_info_off", code_item_.debug_info_off)
             print("     insns_size", code_item_.insns_size)
             print("     insns", code_item_.insns)
-            for i in range (code_item_.insns_size):
-                print("      ", code_item_.insns_size[i]),
             print("     padding", code_item_.padding)
             print("     tries", code_item_.tries)
             print("     handleres", code_item_.handleres)
