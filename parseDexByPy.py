@@ -178,6 +178,14 @@ class code_item:
     handleres =None             #method 的catch块在文件中的偏移，使用"encoded_catch_handler_list"格式进行描述。此次解析不关心。此值存在的条件是 tries_size>0
 
 
+#定义mao_item，用于描述map_list中的数据，在于表示各个表在文件中的偏移量和字段数量
+class map_item:
+    type =None
+    unused =None
+    size =None
+    offset =None
+
+
 #全局变量
 dex_header =struct_dex_header()     #dex结构体
 strings_list =[]                    #string全部字符串信息
@@ -190,7 +198,7 @@ static_fields_list =[]              #class中static field全部信息
 instance_fields_list =[]              #class中instance field全部信息
 direct_methods_list =[]             #class中direct methods全部信息
 virtual_methods_list =[]            #class中virtual methods全部信息
-
+map_list =[]                        #map中各个表全部信息
 
 '''
 函数功能：加载dex文件
@@ -674,8 +682,6 @@ def parseClassIdList():
 
 
 
-
-
 def parseClassDataItem(off):
     class_data_item_ =class_data_item()
 
@@ -896,7 +902,7 @@ def printClassDefList():
                 else:
                     tmp_str = tmp_str +"," +method_item_.proto_str.parameters_str[i_print]
 
-            print("   direct_method i", virtual_methods_i)
+            print("   virtual_method i", virtual_methods_i)
             print("    diff", tmp_str)
             print("    access_flags", virtual_method_item.access_flags_str)
             code_item_ =virtual_method_item.code_data
@@ -915,18 +921,66 @@ def printClassDefList():
         print(" static_values_str", class_item.static_values_str)
 
 
+'''
+函数功能：解析map_list，此列表存放dex中各种表格结构的偏移
+函数参数：
+函数返回：
+'''
+def paresMapIdList():
+    #map_item 中对应各种表的映射
+    typeCodesDict ={
+        0x0000:"TYPE_HEADER_ITEM",
+        0x0001:"TYPE_STRING_ID_ITEM",
+        0x0002:"TYPE_TYPE_ID_ITEM",
+        0x0003:"TYPE_PROTO_ID_ITEM",
+        0x0004:"TYPE_FIELD_ID_ITEM",
+        0x0005:"TYPE_METHOD_ID_ITEM",
+        0x0006:"TYPE_CLASS_DEF_ITEM",
+        0x1000:"TYPE_MAP_LIST",
+        0x1001:"TYPE_TYPE_LIST",
+        0x1002:"TYPE_ANNOTATION_SET_REF_LIST",
+        0x1003:"TYPE_ANNOTATION_SET_ITEM",
+        0x2000:"TYPE_CLASS_DATA_ITEM",
+        0x2001:"TYPE_CODE_ITEM",
+        0x2002:"TYPE_STRING_DATA_ITEM",
+        0x2003:"TYPE_DEBUG_INFO_ITEM",
+        0x2004:"TYPE_ANNOTATION_ITEM",
+        0x2005:"TYPE_ENCODED_ARRAY_ITEM",
+        0x2006:"TYPE_ANNOTATIONS_DIRECTORY_ITEM"
+    }
+
+    map_list_off =eval(dex_header.map_off)    #map_list相对文件的偏移
+
+    if(map_list_off ==0):
+        return
     
+    dexFileMmap.seek(map_list_off)
+    map_list_size =readFileHexData(map_list_off, 4)
 
+    print("---***---map_list_size---***---")
+    print("map数量：",map_list_size)  
 
+    for i in range(map_list_size):
+        map_item_ =map_item()
 
+        dexFileMmap.seek(map_list_off+ 4 +12*i)
+        tmp =readFileHexData(map_list_off+ 4 +12*i, 2)
+        type_ =typeCodesDict.get(tmp)
 
+        tmp =readFileHexData(map_list_off+ 4 +12*i+ 2, 2)
 
+        size_ =readFileHexData(map_list_off+ 4 +12*i+ 4, 4)
+        offset_ =readFileHexData(map_list_off+ 4 +12*i+ 8, 4)
 
+        map_item_.type =type_
+        map_item_.unused =type
+        map_item_.size =size_
+        map_item_.offset =offset_
 
+        map_list.append(map_item_)
 
-
-
-
+        print("map序列 ",i ,
+                type_+ "_"+"size:"+ str(size_)+ "_"+ "offset:"+ str(offset_))
 
 
 
@@ -949,13 +1003,8 @@ def readFileHexData(off,dataLen,*list):
         return list[0][tmp]
     else:
         return 0
-    
-    
 
-
-
-
-
+  
 
 '''
 函数功能：解析uleb128的数据，获取string的长度。
@@ -1035,3 +1084,4 @@ if __name__ == "__main__":
     parseFieldIdList() #解析字段
     parseMethodIdList()#解析method信息
     parseClassIdList() #解析class信息
+    paresMapIdList()   #解析map信息
